@@ -15,7 +15,7 @@ type, public :: tracer_type
 ! real, dimension(:,:,:), pointer :: OBC_in_v       => NULL() !< structured values for flow into the domain
 !                                                             !! specified in OBCs through v-face of cell
 
-  real, dimension(:,:,:), pointer :: t_h            => NULL() !< diagnostic array for thickness multipled tracer
+  real, dimension(:,:,:), pointer :: t_h            => NULL() !< diagnostic array for thickness multiplied tracer
                                                               !! concentration [CU H ~> conc m or conc kg m-2]
   real, dimension(:,:,:), pointer :: ad_x           => NULL() !< diagnostic array for x-advective tracer flux
                                                               !! [CU H L2 T-1 ~> conc m3 s-1 or conc kg s-1]
