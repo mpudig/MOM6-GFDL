@@ -692,7 +692,6 @@ subroutine post_tracer_diagnostics_at_sync(Reg, h, diag_prev, diag, G, GV, dt)
     Tr => Reg%Tr(m)
     if (Tr%id_tr > 0) call post_data(Tr%id_tr, Tr%t, diag)
     if (Tr%id_tr_h > 0) then
-      call safe_alloc_ptr(Tr%id_tr_h,isd,ied,jsd,jed,nz)
       do k=1,nz ; do j=js,je ; do i=is,ie
         Tr%t_h(i,j,k) = Tr%t(i,j,k) * h(i,j,k)
       enddo ; enddo ; enddo
