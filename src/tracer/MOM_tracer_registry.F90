@@ -81,8 +81,6 @@ subroutine register_tracer(tr_ptr, Reg, param_file, HI, GV, name, longname, unit
                                                                 !! tracer cells [CU ~> conc]
 
   ! The following are probably not necessary if registry_diags is present and true.
-  ! real, dimension(:,:,:), optional, pointer     :: t_h          !< diagnostic thickness multiplied tracer
-  !                                                              !! concentration [CU H ~> conc m or conc kg m-2]
   real, dimension(:,:,:), optional, pointer     :: ad_x         !< diagnostic x-advective flux
                                                                 !! [CU H L2 T-1 ~> conc m3 s-1 or conc kg s-1]
   real, dimension(:,:,:), optional, pointer     :: ad_y         !< diagnostic y-advective flux
@@ -235,7 +233,6 @@ subroutine register_tracer(tr_ptr, Reg, param_file, HI, GV, name, longname, unit
 
   if (present(registry_diags)) Tr%registry_diags = registry_diags
 
-!  if (present(t_h)) then ; if (associated(t_h)) Tr%t_h => t_h ; endif
   if (present(ad_x)) then ; if (associated(ad_x)) Tr%ad_x => ad_x ; endif
   if (present(ad_y)) then ; if (associated(ad_y)) Tr%ad_y => ad_y ; endif
   if (present(df_x)) then ; if (associated(df_x)) Tr%df_x => df_x ; endif
