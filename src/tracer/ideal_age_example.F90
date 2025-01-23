@@ -159,6 +159,15 @@ function register_ideal_age_tracer(HI, GV, param_file, CS, tr_Reg, restart_CS)
                             caller=mdl)
     CS%tracer_ages(m) = .false. ; CS%growth_rate(m) = 1.0/30.0
     CS%IC_val(m) = 0.0 ; CS%young_val(m) = 1e-20 ; CS%tracer_start_year(m) = 0.0
+    call get_param(param_file, mdl, "GROWTH_RATE", CS%growth_rate(m), &
+                 "The exponential growth rate for the young value [year-1]", &
+                 units="years-1")
+    call get_param(param_file, mdl, "IC_VAL", CS%IC_val(m), &
+                 "The (uniform) initial condition value [years] or other units", &
+                 units="years", default=0.0)
+    call get_param(param_file, mdl, "YOUNG_VAL", CS%young_val(m), &
+                 "The value assigned to tracer at the surface [years] or other units", &
+                 units="years", default=1e-20)
     call get_param(param_file, mdl, "IDEAL_VINTAGE_START_YEAR", CS%tracer_start_year(m), &
                  "The date at which the ideal vintage tracer starts.", &
                  units="years", default=0.0)
