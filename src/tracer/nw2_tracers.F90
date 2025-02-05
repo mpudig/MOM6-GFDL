@@ -9,7 +9,6 @@ use MOM_file_parser, only : get_param, log_param, log_version, param_file_type
 use MOM_forcing_type, only : forcing
 use MOM_grid, only : ocean_grid_type
 use MOM_hor_index, only : hor_index_type
-use MOM_interface_heights, only : thickness_to_dz
 use MOM_io, only : file_exists, MOM_read_data, slasher, vardesc, var_desc
 use MOM_restart, only : query_initialized, set_initialized, MOM_restart_CS
 use MOM_time_manager, only : time_type, time_type_to_real
@@ -76,7 +75,7 @@ logical function register_nw2_tracers(HI, GV, US, param_file, CS, tr_Reg, restar
   ! Read all relevant parameters and write them to the model log.
   call log_version(param_file, mdl, version, "")
   call get_param(param_file, mdl, "NW2_TRACER_GROUPS", n_groups, &
-                 "The number of tracer groups where a group is of three tracers "//&
+                 "The number of tracer groups where a group is of four tracers "//&
                  "initialized and restored to sin(2*pi*x), cos(2*pi*x), y and cos(pi*y), respectively."//&
                  "Each group is restored with an independent restoration rate.", &
                  default=2)
@@ -125,9 +124,6 @@ subroutine initialize_nw2_tracers(restart, day, G, GV, US, h, tv, diag, CS)
   type(nw2_tracers_CS),               pointer    :: CS !< The control structure returned by a previous
                                                        !! call to register_nw2_tracer.
   ! Local variables
-  real, dimension(SZI_(G),SZJ_(G),SZK_(GV)+1) :: eta ! Interface heights [Z ~> m]
-  real, dimension(SZI_(G),SZJ_(G),SZK_(GV)) :: dz  ! Vertical extent of layers [Z ~> m]
-  real :: rscl ! z* scaling factor [nondim]
   character(len=8)  :: var_name ! The variable's name.
   integer :: i, j, k, m
 
@@ -136,30 +132,6 @@ subroutine initialize_nw2_tracers(restart, day, G, GV, US, h, tv, diag, CS)
   CS%Time => day
   CS%diag => diag
 
-  ! Calculate z* interface positions
-  call thickness_to_dz(h, tv, dz, G, GV, US)
-
-  if (GV%Boussinesq) then
-    ! First calculate interface positions in z-space (m)
-    do j=G%jsc,G%jec ; do i=G%isc,G%iec
-      eta(i,j,GV%ke+1) = - G%mask2dT(i,j) * G%bathyT(i,j)
-    enddo ; enddo
-    do k=GV%ke,1,-1 ; do j=G%jsc,G%jec ; do i=G%isc,G%iec
-      eta(i,j,K) = eta(i,j,K+1) + G%mask2dT(i,j) * dz(i,j,k)
-    enddo ; enddo ; enddo
-    ! Re-calculate for interface positions in z*-space (m)
-    do j=G%jsc,G%jec ; do i=G%isc,G%iec
-      if (G%bathyT(i,j)>0.) then
-        rscl = G%bathyT(i,j) / ( eta(i,j,1) + G%bathyT(i,j) )
-        do K=GV%ke, 1, -1
-          eta(i,j,K) = eta(i,j,K+1) + G%mask2dT(i,j) * dz(i,j,k) * rscl
-        enddo
-      endif
-    enddo ; enddo
-  else
-    call MOM_error(FATAL, "NW2 tracers assume Boussinesq mode")
-  endif
-
   do m=1,CS%ntr
     ! Initialize only if this is not a restart or we are using a restart
     ! in which the tracers were not present
@@ -167,7 +139,7 @@ subroutine initialize_nw2_tracers(restart, day, G, GV, US, h, tv, diag, CS)
     if ((.not.restart) .or. &
         (.not. query_initialized(CS%tr(:,:,:,m), var_name, CS%restart_CSp))) then
       do k=1,GV%ke ; do j=G%jsc,G%jec ; do i=G%isc,G%iec
-          CS%tr(i,j,k,m) = nw2_tracer_dist(m, G, GV, eta, i, j, k)
+          CS%tr(i,j,k,m) = nw2_tracer_dist(m, G, GV, i, j)
       enddo ; enddo ; enddo
       call set_initialized(CS%tr(:,:,:,m), var_name, CS%restart_CSp)
     endif ! restart
@@ -211,11 +183,8 @@ subroutine nw2_tracer_column_physics(h_old, h_new, ea, eb, fluxes, dt, G, GV, US
 !     h_new(k) = h_old(k) + ea(k) - eb(k-1) + eb(k) - ea(k+1)
   ! Local variables
   real, dimension(SZI_(G),SZJ_(G),SZK_(GV)) :: h_work ! Used so that h can be modified [H ~> m or kg m-2]
-  real, dimension(SZI_(G),SZJ_(G),SZK_(GV)+1) :: eta ! Interface heights [Z ~> m]
-  real, dimension(SZI_(G),SZJ_(G),SZK_(GV)) :: dz  ! Vertical extent of layers [Z ~> m]
   integer :: i, j, k, m
   real :: dt_x_rate ! dt * restoring rate [nondim]
-  real :: rscl ! z* scaling factor [nondim]
   real :: target_value ! tracer target value for damping [conc]
 
 ! if (.not.associated(CS)) return
@@ -235,35 +204,11 @@ subroutine nw2_tracer_column_physics(h_old, h_new, ea, eb, fluxes, dt, G, GV, US
     enddo
   endif
 
-  ! Calculate z* interface positions
-  call thickness_to_dz(h_new, tv, dz, G, GV, US)
-
-  if (GV%Boussinesq) then
-    ! First calculate interface positions in z-space [Z ~> m]
-    do j=G%jsc,G%jec ; do i=G%isc,G%iec
-      eta(i,j,GV%ke+1) = - G%mask2dT(i,j) * G%bathyT(i,j)
-    enddo ; enddo
-    do k=GV%ke,1,-1 ; do j=G%jsc,G%jec ; do i=G%isc,G%iec
-      eta(i,j,K) = eta(i,j,K+1) + G%mask2dT(i,j) * dz(i,j,k)
-    enddo ; enddo ; enddo
-    ! Re-calculate for interface positions in z*-space [Z ~> m]
-    do j=G%jsc,G%jec ; do i=G%isc,G%iec
-      if (G%bathyT(i,j)>0.) then
-        rscl = G%bathyT(i,j) / ( eta(i,j,1) + G%bathyT(i,j) )
-        do K=GV%ke, 1, -1
-          eta(i,j,K) = eta(i,j,K+1) + G%mask2dT(i,j) * dz(i,j,k) * rscl
-        enddo
-      endif
-    enddo ; enddo
-  else
-    call MOM_error(FATAL, "NW2 tracers assume Boussinesq mode")
-  endif
-
   do m=1,CS%ntr
     dt_x_rate = dt * CS%restore_rate(m)
     !$OMP parallel do default(shared) private(target_value)
     do k=1,GV%ke ; do j=G%jsc,G%jec ; do i=G%isc,G%iec
-      target_value = nw2_tracer_dist(m, G, GV, eta, i, j, k)
+      target_value = nw2_tracer_dist(m, G, GV, i, j)
       CS%tr(i,j,k,m) = CS%tr(i,j,k,m) + G%mask2dT(i,j) * dt_x_rate * ( target_value - CS%tr(i,j,k,m) )
     enddo ; enddo ; enddo
   enddo
@@ -272,15 +217,12 @@ end subroutine nw2_tracer_column_physics
 
 !> The target value of a NeverWorld2 tracer label m at non-dimensional
 !! position x=lon/Lx, y=lat/Ly
-real function nw2_tracer_dist(m, G, GV, eta, i, j, k)
+real function nw2_tracer_dist(m, G, GV, i, j)
   integer, intent(in) :: m !< Indicates the NW2 tracer
   type(ocean_grid_type),   intent(in) :: G   !< The ocean's grid structure
   type(verticalGrid_type), intent(in) :: GV  !< The ocean's vertical grid structure
-  real, dimension(SZI_(G),SZJ_(G),SZK_(GV)+1), &
-                           intent(in) :: eta !< Interface position [Z ~> m]
   integer, intent(in) :: i !< Cell index i
   integer, intent(in) :: j !< Cell index j
-  integer, intent(in) :: k !< Layer index k
   ! Local variables
   real :: pi ! 3.1415... [nondim]
   real :: x, y ! non-dimensional relative positions [nondim]
