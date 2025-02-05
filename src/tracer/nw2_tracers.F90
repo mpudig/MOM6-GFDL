@@ -62,7 +62,7 @@ logical function register_nw2_tracers(HI, GV, US, param_file, CS, tr_Reg, restar
   character(len=8)  :: var_name ! The variable's name.
   real, pointer :: tr_ptr(:,:,:) => NULL() ! The tracer concentration [conc]
   integer :: isd, ied, jsd, jed, nz, m, ig
-  integer :: n_groups ! Number of groups of three tracers (i.e. # tracers/3)
+  integer :: n_groups ! Number of groups of four tracers (i.e. # tracers/4)
   real, allocatable, dimension(:) :: timescale_in_days ! Damping timescale [days]
   type(vardesc) :: tr_desc ! Descriptions and metadata for the tracers
   isd = HI%isd ; ied = HI%ied ; jsd = HI%jsd ; jed = HI%jed ; nz = GV%ke
@@ -77,16 +77,16 @@ logical function register_nw2_tracers(HI, GV, US, param_file, CS, tr_Reg, restar
   call log_version(param_file, mdl, version, "")
   call get_param(param_file, mdl, "NW2_TRACER_GROUPS", n_groups, &
                  "The number of tracer groups where a group is of three tracers "//&
-                 "initialized and restored to sin(x), y and z, respectively. Each "//&
-                 "group is restored with an independent restoration rate.", &
-                 default=3)
+                 "initialized and restored to sin(2*pi*x), cos(2*pi*x), y and cos(pi*y), respectively."//&
+                 "Each group is restored with an independent restoration rate.", &
+                 default=2)
   allocate(timescale_in_days(n_groups))
-  timescale_in_days = (/365., 730., 1460./)
+  timescale_in_days = (/730., 2190./)
   call get_param(param_file, mdl, "NW2_TRACER_RESTORE_TIMESCALE", timescale_in_days, &
                  "A list of timescales, one for each tracer group.", &
                  units="days")
 
-  CS%ntr = 3 * n_groups
+  CS%ntr = 4 * n_groups
   allocate(CS%tr(isd:ied,jsd:jed,nz,CS%ntr), source=0.0)
   allocate(CS%restore_rate(CS%ntr))
 
@@ -99,7 +99,7 @@ logical function register_nw2_tracers(HI, GV, US, param_file, CS, tr_Reg, restar
     ! Register the tracer for horizontal advection, diffusion, and restarts.
     call register_tracer(tr_ptr, tr_Reg, param_file, HI, GV, tr_desc=tr_desc, &
                          registry_diags=.true., restart_CS=restart_CS, mandatory=.false.)
-    ig = int( (m+2)/3 ) ! maps (1,2,3)->1, (4,5,6)->2, ...
+    ig = int( (m+2)/4 ) ! maps (1,2,3,4)->1, (5,6,7,8)->2, ...
     CS%restore_rate(m) = 1.0 / ( timescale_in_days(ig) * 86400.0*US%s_to_T )
   enddo
 
@@ -271,7 +271,7 @@ subroutine nw2_tracer_column_physics(h_old, h_new, ea, eb, fluxes, dt, G, GV, US
 end subroutine nw2_tracer_column_physics
 
 !> The target value of a NeverWorld2 tracer label m at non-dimensional
-!! position x=lon/Lx, y=lat/Ly, z=eta/H
+!! position x=lon/Lx, y=lat/Ly
 real function nw2_tracer_dist(m, G, GV, eta, i, j, k)
   integer, intent(in) :: m !< Indicates the NW2 tracer
   type(ocean_grid_type),   intent(in) :: G   !< The ocean's grid structure
@@ -283,18 +283,19 @@ real function nw2_tracer_dist(m, G, GV, eta, i, j, k)
   integer, intent(in) :: k !< Layer index k
   ! Local variables
   real :: pi ! 3.1415... [nondim]
-  real :: x, y, z ! non-dimensional relative positions [nondim]
+  real :: x, y ! non-dimensional relative positions [nondim]
   pi = 2.*acos(0.)
   x = ( G%geolonT(i,j) - G%west_lon ) / G%len_lon ! 0 ... 1
   y = -G%geolatT(i,j) / G%south_lat ! -1 ... 1
-  z = - 0.5 * ( eta(i,j,K) + eta(i,j,K+1) ) / GV%max_depth ! 0 ... 1
-  select case ( mod(m-1,3) )
+  select case ( mod(m-1,4) )
   case (0) ! sin(2 pi x/L)
     nw2_tracer_dist = sin( 2.0 * pi * x )
-  case (1) ! y/L
+  case (1) ! cos(2 pi x/L)
+    nw2_tracer_dist = cos( 2.0 * pi * x )
+  case (2) ! y/L
     nw2_tracer_dist = y
-  case (2) ! -z/L
-    nw2_tracer_dist = -z
+  case (3) ! cos(pi y/L)
+    nw2_tracer_dist = cos(pi * y )
   case default
     stop 'This should not happen. Died in nw2_tracer_dist()!'
   end select
