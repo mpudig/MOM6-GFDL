@@ -98,7 +98,7 @@ logical function register_nw2_tracers(HI, GV, US, param_file, CS, tr_Reg, restar
     ! Register the tracer for horizontal advection, diffusion, and restarts.
     call register_tracer(tr_ptr, tr_Reg, param_file, HI, GV, tr_desc=tr_desc, &
                          registry_diags=.true., restart_CS=restart_CS, mandatory=.false.)
-    ig = int( (m+2)/4 ) ! maps (1,2,3,4)->1, (5,6,7,8)->2, ...
+    ig = int( (m+3)/4 ) ! maps (1,2,3,4)->1, (5,6,7,8)->2, ...
     CS%restore_rate(m) = 1.0 / ( timescale_in_days(ig) * 86400.0*US%s_to_T )
   enddo
 
@@ -142,7 +142,7 @@ subroutine initialize_nw2_tracers(restart, day, G, GV, US, h, tv, diag, CS)
           CS%tr(i,j,k,m) = nw2_tracer_dist(m, G, GV, i, j)
       enddo ; enddo ; enddo
       call set_initialized(CS%tr(:,:,:,m), var_name, CS%restart_CSp)
-    endif ! restart
+    endif ! restartg
   enddo ! Tracer loop
 
 end subroutine initialize_nw2_tracers
